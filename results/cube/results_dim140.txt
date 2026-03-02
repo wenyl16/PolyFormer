@@ -1,0 +1,2 @@
+Initial: FeasErr=6.6264e+03, OptErr=1.2047e-17
+Converged at epoch: 2520

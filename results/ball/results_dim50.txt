@@ -1,0 +1,6 @@
+Initial: distance=2.3122e+02
+Final: distance=8.6035e-01, ideal_distance=7.2270e-01
+approximating_rate=9.9940e-01
+Initial: distance=4.1619e+01
+Final: distance=7.9312e-01, ideal_distance=7.2270e-01
+approximating_rate=9.9828e-01
