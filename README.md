@@ -7,23 +7,23 @@ PolyFormer is a physics-informed machine-learning framework for replacing comple
 feasible-region constraints with compact polytopes. For a parameterized feasible
 region
 
-$$
+```math
 \Omega(\boldsymbol\theta)
 =
 \{\mathbf x\mid \exists \mathbf y:
 g(\mathbf x,\mathbf y;\boldsymbol\theta)\leq 0\},
-$$
+```
 
 PolyFormer learns
 
-$$
+```math
 \mathcal P(\boldsymbol\theta)
 =
 \{\mathbf x\mid
 \mathbf A(\boldsymbol\theta)\mathbf x
 \leq
 \mathbf b(\boldsymbol\theta)\}.
-$$
+```
 
 The learned inequalities can be inserted directly into downstream optimization
 models. This reduces the number of variables and constraints while retaining a
