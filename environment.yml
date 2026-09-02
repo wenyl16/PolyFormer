@@ -1,0 +1,9 @@
+name: polyformer
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - ipopt=3.14
+  - pip:
+      - -r requirements.txt

@@ -1,0 +1,3 @@
+Initial: distance=4.0880e+02
+Final: distance=9.3993e-01, ideal_distance=7.9150e-01
+approximating_rate=9.9964e-01

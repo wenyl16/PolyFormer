@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.audit_tools/
+.recovered/
+*.log
+
+# Local manuscript sources are not part of the public code release.
+/v11/
+/supplementary_info_v3/
