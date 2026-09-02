@@ -587,18 +587,6 @@ outside the four main application cases.
 - Original-region evaluation requires the corresponding optimization solver and
   input data even when trained neural weights are already available.
 
-## Known release limitations
-
-1. The complete raw-to-NPZ aggregation preprocessing program and its original
-   seed are not included; `profiles_data.npz` is the canonical processed input.
-2. Historical result directories do not uniformly contain a configuration file,
-   random seed, or software manifest. The supplied environment files document the
-   current executable environment but cannot add missing historical provenance.
-3. Some legacy, non-main scripts retain older calling conventions. Use the
-   documented runners for the paper workflows.
-4. A small number of non-main MATPOWER files contain unbounded limits or belong to
-   incomplete exploratory experiments. They are not loaded by the main runners.
-
 ## Citation
 
 Please cite the accompanying manuscript:
