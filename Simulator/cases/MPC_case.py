@@ -316,7 +316,7 @@ class MPCcase:
             self.model.x[0, i].fix(x0[i])
 
         # 求解
-        solver = pyo.SolverFactory('cplex')
+        solver = pyo.SolverFactory('gurobi')
         result = solver.solve(self.model, tee=False)
 
         if result.solver.status != pyo.SolverStatus.ok or result.solver.termination_condition != pyo.TerminationCondition.optimal:

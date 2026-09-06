@@ -1,9 +1,8 @@
 # IMPORTANT: this file installs Python packages only.
 # With the source defaults, every training and smoke workflow also requires a
 # working Gurobi installation and license. T-D, three-phase, nonconvex, and
-# epigraph workflows additionally require IPOPT. Polygon and ellipse workflows
-# additionally require IBM ILOG CPLEX and its license. environment.yml installs
-# IPOPT, but not Gurobi or CPLEX.
+# epigraph workflows additionally require IPOPT. environment.yml installs IPOPT,
+# but not Gurobi.
 # Solver selection is source-level: changing only ErrorCalculator(solver=...)
 # does not change its independent cvx_solver='gurobi' default. See the solver
 # matrix and replacement instructions at the beginning of README.md.

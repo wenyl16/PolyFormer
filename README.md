@@ -8,9 +8,9 @@ Research code, public data, and reference results accompanying the manuscript
 > Installing `requirements.txt` is not sufficient to run the training or smoke
 > workflows. With the source defaults, every documented training and smoke
 > command uses **Gurobi** through Pyomo and requires a working Gurobi installation
-> and license. Some workflows additionally use **IPOPT** or **IBM ILOG CPLEX**.
-> Gurobi can be removed from selected workflows by changing both solver settings
-> described in [Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
+> and license. The nonlinear workflows additionally use **IPOPT**. Solver
+> selection is explained in
+> [Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
 
 ## Requirements and installation
 
@@ -24,20 +24,21 @@ the source uses Python 3.12 f-string syntax.
 | Data and result validation (`python -m Simulator.validate_release`) | None |
 | Aggregation and DRCC | Gurobi |
 | Balanced and three-phase T–D | Gurobi + IPOPT |
-| Polygon and ellipse | Gurobi + CPLEX |
+| Polygon and ellipse | Gurobi |
 | Nonconvex region and epigraph | Gurobi + IPOPT |
 | Hypercube and ball | Gurobi |
 | Legacy EV and safe-region programs | Gurobi |
-| Legacy MPC programs | Gurobi; some paths also use IPOPT and CPLEX |
+| Legacy MPC programs | Gurobi; some paths also use IPOPT |
 
 Gurobi solves all approximating-polytope subproblems and is therefore common to
 every documented training runner. IPOPT solves the original nonlinear T–D,
-three-phase, nonconvex, and epigraph models. CPLEX solves the original polygon
-and ellipse models and is also called by one legacy MPC path. The documented
-Python runners do not require MATLAB or a MATPOWER installation.
+three-phase, nonconvex, and epigraph models. Gurobi also solves the original
+polygon, ellipse, aggregation, DRCC, hypercube, ball, EV, safe-region, and MPC
+models. The documented Python runners do not require MATLAB or a MATPOWER
+installation.
 
-The tested solver versions are Gurobi 12.0.2, IPOPT 3.14.17, and CPLEX 22.1.2.
-These are tested versions, not strict minimum versions.
+The tested solver versions are Gurobi 12.0.2 and IPOPT 3.14.17. These are tested
+versions, not strict minimum versions.
 
 ### Recommended Conda environment
 
@@ -47,8 +48,8 @@ conda activate polyformer
 ```
 
 This installs Python 3.12, the packages in `requirements.txt`, and IPOPT. It does
-**not** install or license Gurobi or CPLEX; install those products separately and
-make their solver interfaces available to Pyomo.
+**not** install or license Gurobi; install Gurobi separately and make its solver
+interface available to Pyomo.
 
 For an existing Python 3.12 environment:
 
@@ -56,21 +57,20 @@ For an existing Python 3.12 environment:
 python -m pip install -r requirements.txt
 ```
 
-The pip command installs Python packages only. It does not install the Gurobi,
-IPOPT, or CPLEX solver executables. NumPy is constrained to `<2.0` to match the
-tested scientific Python stack. CUDA is optional; smoke checks can run with
-PyTorch on CPU.
+The pip command installs Python packages only. It does not install the Gurobi or
+IPOPT solver executables. NumPy is constrained to `<2.0` to match the tested
+scientific Python stack. CUDA is optional; smoke checks can run with PyTorch on
+CPU.
 
-Check whether Pyomo can discover the three solver interfaces:
+Check whether Pyomo can discover both solver interfaces:
 
 ```bash
-python -c "from pyomo.environ import SolverFactory; print({s: SolverFactory(s).available(False) for s in ('gurobi','ipopt','cplex')})"
+python -c "from pyomo.environ import SolverFactory; print({s: SolverFactory(s).available(False) for s in ('gurobi','ipopt')})"
 ```
 
 For the combined main-application smoke test, both `gurobi` and `ipopt` must be
-`True`. CPLEX is only needed for the polygon, ellipse, and relevant legacy MPC
-paths. `available(False)` checks discovery, not license validity or the
-ability to solve a model; the smoke commands below perform an actual solve.
+`True`. `available(False)` checks discovery, not license validity or the ability
+to solve a model; the smoke commands below perform an actual solve.
 
 ### Selecting or replacing solver backends
 
@@ -86,37 +86,36 @@ supports separate solver names through Pyomo's `SolverFactory`:
 | `fmax_solver` | The initial upper-objective calculation for an epigraph model | The epigraph's objective-maximization problem |
 
 `cvx_solver` defaults independently to `gurobi`. Therefore, changing only
-`solver='cplex'` or `solver='ipopt'` **does not remove the Gurobi dependency**.
-To change a case, edit its `ErrorCalculator(...)` call and set both names
-explicitly:
+`solver='ipopt'` **does not remove the Gurobi dependency**. To change a case,
+edit its `ErrorCalculator(...)` call and set both names explicitly:
 
 ```python
 errorcalculator = ErrorCalculator(
     original_model=original_model,
     A_hat=A_hat,
-    solver='cplex',       # original feasible-region model
-    cvx_solver='cplex',   # learned-polytope LP/QP subproblems
+    solver='gurobi',       # original feasible-region model
+    cvx_solver='gurobi',   # learned-polytope LP/QP subproblems
 )
 ```
 
-For example, a Gurobi-free T–D configuration keeps IPOPT for the nonlinear
-network and assigns CPLEX to the polytope:
+For the nonlinear T–D workflows, keep IPOPT for the original network model and
+Gurobi for the learned polytope:
 
 ```python
 errorcalculator = ErrorCalculator(
     original_model=original_model,
     A_hat=A_hat,
     solver='ipopt',
-    cvx_solver='cplex',
+    cvx_solver='gurobi',
 )
 ```
 
 IPOPT may also be used as `cvx_solver` for the continuous polytope LP/QP models.
 It passed the one-update polygon smoke check in this release audit, although a
 dedicated convex QP solver is normally preferable for speed and termination
-behavior. A CPLEX-only polygon check and a CPLEX-only mixed-aggregation check
-also passed one update. These checks establish executability of those small
-configurations, not numerical equivalence for every full experiment.
+behavior. This check establishes executability of that small continuous
+configuration, not numerical equivalence for every full experiment. IPOPT cannot
+replace Gurobi in workflows containing binary variables.
 
 Choose the original-region solver according to the complete model encountered
 during training. Every case adds a squared-distance projection objective, so an
@@ -124,9 +123,9 @@ apparently linear original model still requires QP or MIQP support.
 
 | Original-region case family | Model class encountered during training | Safe solver guidance |
 |---|---|---|
-| Polygon, cube, DRCC, EV, and continuous aggregation | Continuous LP and convex QP | Gurobi or CPLEX; IPOPT is a continuous fallback |
-| Ellipse, ball, quadratic safe region, and MPC feasible region | Continuous QCP/QCQP | Gurobi or CPLEX; IPOPT can provide a local continuous-NLP solve |
-| Mixed aggregation and mixed-integer microgrid | MILP and convex MIQP | Gurobi or CPLEX; IPOPT cannot handle binary variables |
+| Polygon, cube, DRCC, EV, and continuous aggregation | Continuous LP and convex QP | Gurobi; IPOPT is a continuous fallback |
+| Ellipse, ball, quadratic safe region, and MPC feasible region | Continuous QCP/QCQP | Gurobi; IPOPT can provide a local continuous-NLP solve |
+| Mixed aggregation and mixed-integer microgrid | MILP and convex MIQP | Gurobi; IPOPT cannot handle binary variables |
 | Nonconvex geometry, balanced T–D, and three-phase T–D | Continuous nonconvex QCQP/NLP | IPOPT is the tested project setting; validate any replacement on the exact case |
 | Epigraph and MPC-objective upper-bound calculation | Nonconvex objective maximization | Keep or set `fmax_solver` separately; do not assume the ordinary `solver` is suitable |
 
@@ -143,8 +142,8 @@ Edit the named function and add or replace both keyword arguments shown above:
 
 | Workflow | Source function to edit | Source default: `solver` / `cvx_solver` |
 |---|---|---|
-| Polygon | `Simulator/cases/basic_cases.py` → `case_polygon` | `cplex` / implicit `gurobi` |
-| Ellipse | `Simulator/cases/basic_cases.py` → `case_ellipse` | `cplex` / implicit `gurobi` |
+| Polygon | `Simulator/cases/basic_cases.py` → `case_polygon` | `gurobi` / implicit `gurobi` |
+| Ellipse | `Simulator/cases/basic_cases.py` → `case_ellipse` | `gurobi` / implicit `gurobi` |
 | Nonconvex region | `Simulator/cases/basic_cases.py` → `case_nonconvex` | `ipopt` / implicit `gurobi` |
 | Hypercube | `Simulator/cases/basic_cases.py` → `case_cube` | `gurobi` / implicit `gurobi` |
 | Ball | `Simulator/cases/basic_cases.py` → `case_ball` | `gurobi` / implicit `gurobi` |
@@ -180,7 +179,7 @@ not controlled by the two settings above:
 After editing, first check discovery of the exact names:
 
 ```bash
-python -c "from pyomo.environ import SolverFactory; names=('ipopt','cplex'); print({s: SolverFactory(s).available(False) for s in names})"
+python -c "from pyomo.environ import SolverFactory; names=('gurobi','ipopt'); print({s: SolverFactory(s).available(False) for s in names})"
 ```
 
 Then run the one-update command for the modified workflow from
@@ -282,7 +281,7 @@ PolyFormer/
 
 ### 1. Validate data and reference results
 
-The validator itself does not invoke Gurobi, IPOPT, or CPLEX.
+The validator itself does not invoke Gurobi or IPOPT.
 
 ```bash
 python -m Simulator.validate_release

@@ -79,7 +79,7 @@ def case_polygon(
     errorcalculator = ErrorCalculator(
         original_model=original_model,
         A_hat=A_hat,
-        solver='cplex',
+        solver='gurobi',
     )
     A_list = [errorcalculator.A_hat]
     b_list = [errorcalculator.b_hat]
@@ -245,7 +245,7 @@ def case_ellipse(
     errorcalculator = ErrorCalculator(
         original_model=original_model,
         A_hat=A_hat,
-        solver='cplex'
+        solver='gurobi'
     )
     A_list = [errorcalculator.A_hat]
     b_list = [errorcalculator.b_hat]
