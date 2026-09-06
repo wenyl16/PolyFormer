@@ -28,12 +28,11 @@ the source uses Python 3.12 f-string syntax.
 | Nonconvex region and epigraph | Gurobi + IPOPT |
 | Hypercube and ball | Gurobi |
 | Legacy EV and safe-region programs | Gurobi |
-| Legacy MPC programs | Gurobi; some paths also use IPOPT |
 
 Gurobi solves all approximating-polytope subproblems and is therefore common to
 every documented training runner. IPOPT solves the original nonlinear T–D,
 three-phase, nonconvex, and epigraph models. Gurobi also solves the original
-polygon, ellipse, aggregation, DRCC, hypercube, ball, EV, safe-region, and MPC
+polygon, ellipse, aggregation, DRCC, hypercube, ball, EV, and safe-region
 models. The documented Python runners do not require MATLAB or a MATPOWER
 installation.
 
@@ -124,10 +123,10 @@ apparently linear original model still requires QP or MIQP support.
 | Original-region case family | Model class encountered during training | Safe solver guidance |
 |---|---|---|
 | Polygon, cube, DRCC, EV, and continuous aggregation | Continuous LP and convex QP | Gurobi; IPOPT is a continuous fallback |
-| Ellipse, ball, quadratic safe region, and MPC feasible region | Continuous QCP/QCQP | Gurobi; IPOPT can provide a local continuous-NLP solve |
+| Ellipse, ball, and quadratic safe region | Continuous QCP/QCQP | Gurobi; IPOPT can provide a local continuous-NLP solve |
 | Mixed aggregation and mixed-integer microgrid | MILP and convex MIQP | Gurobi; IPOPT cannot handle binary variables |
 | Nonconvex geometry, balanced T–D, and three-phase T–D | Continuous nonconvex QCQP/NLP | IPOPT is the tested project setting; validate any replacement on the exact case |
-| Epigraph and MPC-objective upper-bound calculation | Nonconvex objective maximization | Keep or set `fmax_solver` separately; do not assume the ordinary `solver` is suitable |
+| Epigraph upper-bound calculation | Nonconvex objective maximization | Keep or set `fmax_solver` separately; do not assume the ordinary `solver` is suitable |
 
 GLPK and CBC are not drop-in PolyFormer training solvers: they do not solve the
 quadratic projection problems created by `ErrorCalculator`. HiGHS is likewise
@@ -168,11 +167,6 @@ not controlled by the two settings above:
 - `safe_region_case.py` stores Gurobi in `self.solver`; this controls its bound
   calculation and original-region solves, while its `ErrorCalculator` calls
   still need an explicit `cvx_solver`.
-- `MPC_case.py` has distinct solvers for the feasible-region model, objective
-  epigraph, epigraph maximum, original MPC, and approximated MPC. Update each
-  corresponding `SolverFactory(...)`, `solver=...`, and `fmax_solver` entry;
-  do not replace them with one shared name unless that solver supports every
-  listed model class.
 - The six `tst_TD*.py` helper scripts construct IPOPT directly. They are
   evaluation scripts rather than the documented training runners.
 
@@ -709,7 +703,7 @@ FullNet directly.
 
 ### Non-main historical artifacts
 
-`results/MPC`, `results/safe_region`, `results/epigraph`, and
+`results/safe_region`, `results/epigraph`, and
 `results/ev_agg` are exploratory or historical workflows rather than evidence for
 the paper's principal claims. The incomplete `results/DRCC/x210g3s420`,
 `results/DRCC/x400g5s1280`, and `results/epigraph_specified` directories are also

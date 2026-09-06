@@ -82,14 +82,6 @@ class ErrorCalculator():
                        for j in range(self.dim)) <= model.b[i]
         self.approx_model.constraints = Constraint(range(n_cons), rule=matrix_constraint_rule)
 
-        FR_params = original_model.get('FR_params', None)
-        if is_epigraph and (FR_params is not None) and (FR_params['A_fr'] is not None) and (FR_params['b_fr'] is not None):
-            A_fr = FR_params['A_fr']
-            b_fr = FR_params['b_fr']
-            def epigraph_fr_rule(model, i):
-                return sum(A_fr[i, j] * model.var_proj[j]
-                           for j in range(self.dim-1)) <= b_fr[i]
-            self.approx_model.epigraph_fr = Constraint(range(A_fr.shape[0]), rule=epigraph_fr_rule)
         self.cvx_solver = self._build_solver(cvx_solver, role="polytope")
 
         self.params = {'active_tol': 1e-5}
