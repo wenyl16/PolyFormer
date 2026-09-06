@@ -501,6 +501,16 @@ Omit `--group` to train every group, or repeat it:
 python -m Simulator.runners.main_drcc --case 400x8x1280 --group 0 --group 1 --seed 0
 ```
 
+### Simple safe-region training
+
+```bash
+python -m Simulator.runners.main_safe_region_simple
+```
+
+This runner uses `build_case_1` and defaults to FullNet. Its network selection
+remains the `model_type` setting near the top of the script. Outputs remain
+under `results/safe_region/simple_case`.
+
 ### Microgrid safe-region training
 
 The microgrid experiment uses one runner for both network types:
