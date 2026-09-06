@@ -412,8 +412,8 @@ def case_epigraph(total_samples=100, noise_scale=0.15, batch_size=5, model_type=
         [1, 0],  # x <= theta0
         [-1, 0],  # x >= 0
         [0, -1],  # f >= theta1*x² (需要后续处理)
-        [2,-1],
-        [1, -1],
+        # [2,-1],
+        # [1, -1],
     ],dtype=float) #所有的A矩阵写在这里
     A_hat = np.vstack([A_hat,[0,1.]]) #这一行不能变，这表示目标函数的上界
     # [0, 1],  # f <= theta0*theta1

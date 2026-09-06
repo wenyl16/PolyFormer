@@ -14,9 +14,10 @@ import pandas as pd
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 np.random.seed(0)
-N_var = 300
-N_levels = 5
-N_samples = 900
+N_var = 400
+N_levels = 8
+N_samples = 1280
+dim_theta = 4
 data_path = f'{PROJECT_ROOT}/data/DRCC/r_samples_x{N_var}g{N_levels}s{N_samples}'
 
 r_samples = pd.read_csv(data_path+'.csv')
@@ -35,8 +36,10 @@ portfolio =  DRCCModelBuilder(params)
 apx_data = {}
 params_meta_data = {}
 for group_idx in range(portfolio.group_number):
-    case = portfolio.build_drcc_train(portfolio.group_dataset[group_idx],device=device) #这个model_type不重要
-    apx_data[group_idx] = {'A': case['A_hat'], 'b': case['b_hat']}
+    dim = int(N_var/N_levels)
+    A = np.ones([4*dim+2,dim])
+    b = np.zeros(4*dim+2)
+    apx_data[group_idx] = {'A': A, 'b': b}
 
     R_mean = np.mean(portfolio.group_dataset[group_idx]['samples'])
     R_std = np.std(portfolio.group_dataset[group_idx]['samples'])
@@ -64,10 +67,10 @@ for group_idx in range(portfolio.group_number):
     if model_type == 'pretrainnet':
         pred_models[group_idx] =  PreTrainNet(apx_data[group_idx]['A'],apx_data[group_idx]['b'])
     elif model_type == 'fullnet':
-        dim_theta = 4
+
         pred_models[group_idx] = FullNet(dim_theta=dim_theta, n_hidden=128, A_init=apx_data[group_idx]['A'], b_init=apx_data[group_idx]['b'])
     pred_models[group_idx].load_state_dict(
-            torch.load(f'{PROJECT_ROOT}\\results\\DRCC\\{case['casename']}\\g{group_idx}\\{model_type}_weights.pth',
+            torch.load(f'{PROJECT_ROOT}\\results\\DRCC\\x{N_var}g{N_levels}s{N_samples}\\g{group_idx}\\{model_type}_weights.pth',
                        map_location=device))
 
 #生成参数扰动样本
@@ -84,8 +87,8 @@ def sample_parameters(params_meta_data):
         rho = 10 ** rho_exp
         sample[group_idx]={
             "R_min": R_min,
-            "rho": rho,
             "eps": eps,
+            "rho": rho,
             "max_group_total": max_total
         }
     return sample
@@ -93,71 +96,58 @@ def sample_parameters(params_meta_data):
 
 #开始测试
 r_test_samples = pd.read_csv(data_path + '_test.csv')
-N_test = 1 if model_type=='pretrainnet' else 20
+N_test = 1 if model_type=='pretrainnet' else 300
 res_list = []
-eps_points = np.linspace(0.03, 0.18, 31)
-for eps in eps_points:
-    print(eps)
-    res_dict = {'eps':[],'obj_org': [], 'obj_apx': [], 'vr_org': [], 'vr_apx': [], 'vv_org': [], 'vv_apx': []}
-    for i in range(N_test):
-        print(i)
-        new_apx_data = {}
-        if model_type == 'pretrainnet':
-            for group_idx in range(portfolio.group_number):
-                A_pred, b_pred = pred_models[group_idx]()
-                A_pred = A_pred[0].detach().cpu().numpy()
-                b_pred = b_pred[0].detach().cpu().numpy()
+# eps_points = np.linspace(0.03, 0.18, 31)
+# for eps in eps_points:
+#     print(eps)
+res_dict = {'eps':[],'obj_org': [], 'obj_apx': [], 'vr_org': [], 'vr_apx': [], 'vv_org': [], 'vv_apx': []}
+for i in range(N_test):
+    print(i)
+    new_apx_data = {}
+    if model_type == 'pretrainnet':
+        for group_idx in range(portfolio.group_number):
+            A_pred, b_pred = pred_models[group_idx]()
+            A_pred = A_pred[0].detach().cpu().numpy()
+            b_pred = b_pred[0].detach().cpu().numpy()
 
-                new_apx_data[group_idx] = {"A": A_pred, "b": b_pred}
-        elif model_type == 'fullnet':
-            sample = sample_parameters(params_meta_data)
-            for group_idx in range(portfolio.group_number):
-                sample[group_idx]['eps'] = eps
-            delta_dict = portfolio.update_original_params(sample)
+            new_apx_data[group_idx] = {"A": A_pred, "b": b_pred}
+    elif model_type == 'fullnet':
+        sample = sample_parameters(params_meta_data)
+        delta_dict = portfolio.update_original_params(sample)
 
-            # delta_dict[0][2] -= 0.02 #Rmin, rho, eps,  max_group_total
-            # delta_dict[8][1] += 0.06
-            # delta_dict[9][1] += 0.03
-            # delta_dict[7][0] -= 0.2
-            # delta_dict[8][0] -= 0.2
-            # delta_dict[9][0] -= 0.2
+        for group_idx in range(portfolio.group_number):
+            # Intentional conservative correction of the FullNet inputs.
+            # Normalized input order: [R_min, eps, rho, max_group_total].
+            # Shift eps by +0.3 and rho by -0.3 in normalized input space;
+            # these are not offsets to the physical parameter values.
+            # This correction is applied only to the approximation network;
+            # the original model retains the sampled parameters for comparison.
+            delta_dict[group_idx][1] -= -0.3
+            delta_dict[group_idx][2] += -0.3
+            # delta_dict[group_idx][1] = min([delta_dict[group_idx][1],1.])
+            A_pred, b_pred = pred_models[group_idx](torch.tensor(delta_dict[group_idx], dtype=torch.float32))
+            A_pred = A_pred[0].detach().cpu().numpy()
+            b_pred = b_pred[0].detach().cpu().numpy()
+            new_apx_data[group_idx] = {"A": A_pred, "b": b_pred}
 
-            for group_idx in range(portfolio.group_number):
+    portfolio.update_apx_params(new_apx_data)
 
-                # if group_idx>=7:
-                #     delta_dict[group_idx][0] -= 0.3
-                #     delta_dict[group_idx][1] += 0.22
-                A_pred, b_pred = pred_models[group_idx](torch.tensor(delta_dict[group_idx], dtype=torch.float32))
-                A_pred = A_pred[0].detach().cpu().numpy()
-                b_pred = b_pred[0].detach().cpu().numpy()
+    solution = portfolio.solve(is_apx=False, tee=False)
+    solution_apx = portfolio.solve(is_apx=True, tee=False)
 
-                # delta_dict[group_idx][0] -= 0.2
-                # A_pred_1, b_pred_1 = pred_models[group_idx](torch.tensor(delta_dict[group_idx], dtype=torch.float32))
-                # A_pred_1 = A_pred_1[0].detach().cpu().numpy()
-                # b_pred_1 = b_pred_1[0].detach().cpu().numpy()
-                # A_pred = np.vstack([np.eye(20),-np.eye(20)])
-                # b_pred = np.zeros(40)
-                # print(max(np.abs(b_pred-b_pred_1)))
+    res = portfolio.evaluate_solution(x_vals=solution['x'],r_test_samples = r_test_samples)
+    res_apx = portfolio.evaluate_solution(x_vals=solution_apx['x'],r_test_samples = r_test_samples)
+    # res_dict['eps'].append(eps)
+    res_dict['obj_org'].append(res['test_objective'])
+    res_dict['obj_apx'].append(res_apx['test_objective'])
+    res_dict['vr_org'].append(np.mean([res['violation_probabilities'][group_idx] for group_idx in range(portfolio.group_number)]))
+    res_dict['vr_apx'].append(np.mean([res_apx['violation_probabilities'][group_idx] for group_idx in range(portfolio.group_number)]))
+    res_dict['vv_org'].append(np.mean([res['violation_value'][group_idx] for group_idx in range(portfolio.group_number)]))
+    res_dict['vv_apx'].append(np.mean([res_apx['violation_value'][group_idx] for group_idx in range(portfolio.group_number)]))
+res_list.append(res_dict)
 
-                new_apx_data[group_idx] = {"A": A_pred, "b": b_pred}
-
-        portfolio.update_apx_params(new_apx_data)
-
-        solution = portfolio.solve(is_apx=False, tee=False)
-        solution_apx = portfolio.solve(is_apx=True, tee=False)
-
-        res = portfolio.evaluate_solution(x_vals=solution['x'],r_test_samples = r_test_samples)
-        res_apx = portfolio.evaluate_solution(x_vals=solution_apx['x'],r_test_samples = r_test_samples)
-        res_dict['eps'].append(eps)
-        res_dict['obj_org'].append(res['test_objective'])
-        res_dict['obj_apx'].append(res_apx['test_objective'])
-        res_dict['vr_org'].append(np.mean([res['violation_probabilities'][group_idx] for group_idx in range(portfolio.group_number)]))
-        res_dict['vr_apx'].append(np.mean([res_apx['violation_probabilities'][group_idx] for group_idx in range(portfolio.group_number)]))
-        res_dict['vv_org'].append(np.mean([res['violation_value'][group_idx] for group_idx in range(portfolio.group_number)]))
-        res_dict['vv_apx'].append(np.mean([res_apx['violation_value'][group_idx] for group_idx in range(portfolio.group_number)]))
-    res_list.append(res_dict)
-
-res_path = f'{PROJECT_ROOT}\\results\\DRCC\\{case['casename']}\\test_result.pkl'
+res_path = f'{PROJECT_ROOT}\\results\\DRCC\\x{N_var}g{N_levels}s{N_samples}\\test_result.pkl'
 import pickle
 with open(res_path, 'wb') as f:  # 'wb' 表示二进制写入
     pickle.dump(res_list, f)

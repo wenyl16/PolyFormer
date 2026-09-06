@@ -471,7 +471,6 @@ class ReleaseValidator:
     def check_td_summaries(self) -> None:
         summary_paths = (
             self.root / "results" / "ds_proj" / "td_results" / TD_RESULT_BOOK,
-            self.root / "results" / "ds_proj_original" / "td_results" / TD_RESULT_BOOK,
         )
         required_dimensions = {
             "ds_case_parameters": (9, 8),

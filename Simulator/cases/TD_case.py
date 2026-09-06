@@ -271,10 +271,7 @@ def TDcase(tscasedata, dscasedata_dict, is_apx = False, is_3phase = False):  # �
 
     for tsnode, dscasedata in dscasedata_dict.items():
         block = model.DS[tsnode]
-        if 'vertex' in dscasedata:
-            # 使用基于顶点的凸包约束
-            DScase_vtx(block, dscasedata)
-        elif (not is_apx) and is_3phase:
+        if (not is_apx) and is_3phase:
             import Simulator.cases.DS_case_3phase as DS_case_3phase
             DS_case_3phase.DScase_3phase(block, dscasedata)
             block.constraints.add(model.Pd[tsnode] == Pd_value[tsnode] + block.var_proj[0] * dscasedata['baseMVA'] / baseMVA)
@@ -575,95 +572,6 @@ def DScase(model, dscasedata):  # 使用单相算例，如case33
     # model.constraints.add(model.var_proj[0] == model.Pn[1])
     # model.constraints.add(model.var_proj[1] == model.Qn[1])
     # return model
-
-
-def generate_vertices(dscasedata,
-                       A_directions =  np.vstack([np.eye(2),
-                                                -np.eye(2),
-                                                [1,1],
-                                                [-1,-1],
-                                                [1, -1],
-                                                [-1, 1],
-                                                ]),
-                      V_root = 1.0,
-                       solver_name='ipopt'):
-    model = pyo.ConcreteModel()
-    DScase(model, dscasedata)
-    model.constraints.add(model.V2[1] == V_root**2)
-    n_directions = A_directions.shape[0]
-    vertices = np.zeros((n_directions, 2))
-    feasible_flags = np.zeros(n_directions, dtype=bool)
-
-    # 初始化求解器
-    solver = pyo.SolverFactory(solver_name)
-
-    # 在模型中添加方向参数（可变）
-    model.direction_P = pyo.Param(initialize=0.0, mutable=True)
-    model.direction_Q = pyo.Param(initialize=0.0, mutable=True)
-
-    # 定义目标函数：最大化 A_i * [P1, Q1]（只定义一次）
-    def objective_rule(model):
-        return model.direction_P * model.Pn[1] + model.direction_Q * model.Qn[1]
-
-    model.objective = pyo.Objective(rule=objective_rule, sense=pyo.maximize)
-
-    for i in range(n_directions):
-        # 更新方向参数值
-        model.direction_P.set_value(A_directions[i, 0])
-        model.direction_Q.set_value(A_directions[i, 1])
-
-        try:
-            # 求解优化问题
-            results = solver.solve(model, tee=False)
-
-            # 检查求解状态
-            if (results.solver.status == pyo.SolverStatus.ok and
-                    results.solver.termination_condition == pyo.TerminationCondition.optimal):
-
-                # 提取最优解
-                P1_opt = pyo.value(model.Pn[1])
-                Q1_opt = pyo.value(model.Qn[1])
-
-                vertices[i, 0] = P1_opt
-                vertices[i, 1] = Q1_opt
-                feasible_flags[i] = True
-
-            else:
-                print(f"  方向 {i + 1} 求解失败: {results.solver.termination_condition}")
-                feasible_flags[i] = False
-
-        except Exception as e:
-            print(f"  方向 {i + 1} 求解出错: {str(e)}")
-            feasible_flags[i] = False
-
-    # 过滤出可行的顶点
-    feasible_vertices = vertices[feasible_flags]
-
-    return feasible_vertices, feasible_flags
-
-def DScase_vtx(model, dscasedata_vtx):  # 使用单相算例，基于顶点凸包
-    vertices, _   = dscasedata_vtx['vertex']  # n*2维数组，存储P和Q的n个顶点
-    n_vertices= vertices.shape[0]
-
-    # 定义节点集合和变量
-    model.BUS = pyo.Set(initialize=range(1, 2))
-    model.Pn = pyo.Var(model.BUS, within=pyo.Reals)  # 节点注入功率
-    model.Qn = pyo.Var(model.BUS, within=pyo.Reals)
-    model.V2 = pyo.Var(model.BUS, within=pyo.Reals)
-
-    # 定义凸组合权重变量
-    model.VERTICES = pyo.Set(initialize=range(n_vertices))
-    model.lambda_weights = pyo.Var(model.VERTICES, within=pyo.NonNegativeReals, bounds=(0, 1))
-    model.constraints = pyo.ConstraintList()
-
-    # 凸组合约束：权重之和等于1
-    model.constraints.add(sum(model.lambda_weights[i] for i in model.VERTICES) == 1)
-
-    # Pn约束：Pn[1]必须是所有顶点P坐标的凸组合
-    model.constraints.add(model.Pn[1] == sum(model.lambda_weights[i] * vertices[i, 0] for i in model.VERTICES))
-
-    # Qn约束：Qn[1]必须是所有顶点Q坐标的凸组合
-    model.constraints.add(model.Qn[1] == sum(model.lambda_weights[i] * vertices[i, 1] for i in model.VERTICES))
 
 
 def DScase_apx(model, dscasedata_apx):  # 使用单相算例，如case33

@@ -7,8 +7,10 @@ Research code, public data, and reference results accompanying the manuscript
 >
 > Installing `requirements.txt` is not sufficient to run the training or smoke
 > workflows. With the source defaults, every documented training and smoke
-> command uses **Gurobi** through Pyomo and requires a working Gurobi installation
-> and license. The nonlinear workflows additionally use **IPOPT**. Solver
+> command uses **Gurobi** through Pyomo. The requirements install `gurobipy`, but
+> a suitable **Gurobi license must be configured separately**; the bundled
+> size-limited license is not sufficient for the large paper cases. The nonlinear
+> workflows additionally need the **IPOPT executable**. Solver
 > selection is explained in
 > [Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
 
@@ -33,8 +35,7 @@ Gurobi solves all approximating-polytope subproblems and is therefore common to
 every documented training runner. IPOPT solves the original nonlinear T–D,
 three-phase, nonconvex, and epigraph models. Gurobi also solves the original
 polygon, ellipse, aggregation, DRCC, hypercube, ball, EV, and safe-region
-models. The documented Python runners do not require MATLAB or a MATPOWER
-installation.
+models.
 
 The tested solver versions are Gurobi 12.0.2 and IPOPT 3.14.17. These are tested
 versions, not strict minimum versions.
@@ -46,9 +47,9 @@ conda env create -f environment.yml
 conda activate polyformer
 ```
 
-This installs Python 3.12, the packages in `requirements.txt`, and IPOPT. It does
-**not** install or license Gurobi; install Gurobi separately and make its solver
-interface available to Pyomo.
+This installs Python 3.12, the packages in `requirements.txt` (including
+`gurobipy==12.0.2`), and IPOPT. It does **not** configure an unrestricted Gurobi
+license.
 
 For an existing Python 3.12 environment:
 
@@ -56,10 +57,19 @@ For an existing Python 3.12 environment:
 python -m pip install -r requirements.txt
 ```
 
-The pip command installs Python packages only. It does not install the Gurobi or
-IPOPT solver executables. NumPy is constrained to `<2.0` to match the tested
-scientific Python stack. CUDA is optional; smoke checks can run with PyTorch on
-CPU.
+The pip command installs the Gurobi Python interface and solver library through
+`gurobipy`; Pyomo's `SolverFactory('gurobi')` uses this interface when available.
+It does not install the IPOPT executable. Install IPOPT separately if you do not
+use `environment.yml`, and ensure that Pyomo can find it on `PATH`.
+
+Configure a Gurobi license valid for version 12 and the required model sizes in
+the account/environment that will run Python. For installation and licensing,
+see the official [Gurobi Python installation instructions](https://support.gurobi.com/hc/en-us/articles/360044290292-How-do-I-install-Gurobi-for-Python)
+and [license setup guidance](https://support.gurobi.com/hc/en-us/articles/12684663118993-How-do-I-obtain-a-Gurobi-license).
+Installing the Python package alone does not grant an unrestricted license.
+
+NumPy is constrained to `<2.0` to match the tested scientific Python stack.
+CUDA is optional; smoke checks run with PyTorch on CPU.
 
 Check whether Pyomo can discover both solver interfaces:
 
@@ -73,10 +83,12 @@ to solve a model; the smoke commands below perform an actual solve.
 
 ### Selecting or replacing solver backends
 
-Solver selection is currently a **source-level setting**. The public runners do
-not define a `--solver` command-line option, so adding `--solver ...` to a runner
-command will produce an argument error. The central `ErrorCalculator` already
-supports separate solver names through Pyomo's `SolverFactory`:
+Solver selection is currently a **source-level setting**. No runner defines a
+`--solver` command-line option. Runners with argument parsers reject it; scripts
+without a parser, including `main_ds.py`, ignore arguments and start their
+configured training. Do not use command-line flags to change those scripts.
+The central `ErrorCalculator` supports separate solver names through Pyomo's
+`SolverFactory`:
 
 | Setting | What it solves | Minimum model capability |
 |---|---|---|
@@ -157,7 +169,7 @@ not controlled by the two settings above:
 - In `case_epigraph`, add `'fmax_solver': 'gurobi'` (or another verified
   backend) to the `original_model` dictionary if the upper-objective solve
   should differ from `solver`.
-- `TD_case.generate_vertices`, `DRCCModelBuilder.solve`, and
+- `DRCCModelBuilder.solve` and
   `PolyBallHausdorffCalculator` already accept a `solver_name=...` argument;
   pass the new name at their call sites.
 - `TD_case.disagg_DS` and `DS_case_3phase.disagg_DS_3phase` construct IPOPT
@@ -167,7 +179,7 @@ not controlled by the two settings above:
 - `safe_region_case.py` stores Gurobi in `self.solver`; this controls its bound
   calculation and original-region solves, while its `ErrorCalculator` calls
   still need an explicit `cvx_solver`.
-- The six `tst_TD*.py` helper scripts construct IPOPT directly. They are
+- `tst_TD.py` and `tst_TD_3phase.py` construct IPOPT directly. They are
   evaluation scripts rather than the documented training runners.
 
 After editing, first check discovery of the exact names:
@@ -241,7 +253,7 @@ ellipse, nonconvex, hypercube, and ball benchmarks.
 | Fig. 1, Methods, Supplementary Note 1 | PolyFormer formulation, errors, networks, and training | `Simulator/Approximator.py`, `Simulator/Counter.py`, `Simulator/Plotter.py` | Generated in memory or supplied by each case | Case-specific directories under `results` |
 | Extended Data figures, Supplementary Note 2 | Polygon, ellipse, nonconvex region, hypercube, and ball | `Simulator/cases/basic_cases.py` and `Simulator/runners/main_{polygon,ellipse,nonconvex,cube,ball}.py` | Generated in memory | `results/polygon`, `results/ellipse`, `results/nonconvex`, `results/cube`, `results/ball` |
 | Fig. 2, Supplementary Note 3 | Aggregation of EVs, HPs, and BSSs | `Simulator/cases/aggregation_case.py`, `Simulator/runners/main_agg.py` | `data/aggregator_data`, `data/profiles_data` | `results/aggregation` |
-| Fig. 3, Supplementary Note 4 | Distribution-network projection and T–D optimization | `Simulator/cases/TD_case.py`, `Simulator/cases/DS_case_3phase.py`, `Simulator/runners/main_ds.py`, `Simulator/runners/main_ds_3phase.py` | `data/TD_OPF` and `data/real_dis_data` | `results/ds_proj`, `results/ds_proj_original` |
+| Fig. 3, Supplementary Note 4 | Distribution-network projection and T–D optimization | `Simulator/cases/TD_case.py`, `Simulator/cases/DS_case_3phase.py`, `Simulator/runners/main_ds.py`, `Simulator/runners/main_ds_3phase.py` | `data/TD_OPF` and `data/real_dis_data` | `results/ds_proj` |
 | Fig. 4, Supplementary Note 5 | DRCC portfolio optimization | `Simulator/cases/DRCC_case.py`, `Simulator/runners/main_drcc.py` | `data/DRCC` | `results/DRCC` |
 
 `Simulator/testers` contains evaluation programs used to produce or inspect paper
@@ -287,7 +299,8 @@ The validator checks release-critical files and schemas, including:
 - the eight balanced distribution cases and three transmission cases;
 - both required English three-phase workbooks in `data/real_dis_data`;
 - DRCC training/test CSV shapes, group labels, means, and finite values;
-- the two complete 27-case T–D result workbooks and their required sheets; and
+- the complete 27-case T–D result workbook at
+  `results/ds_proj/td_results/td_experiment_results.xlsx` and its required sheets; and
 - the expected group weights and test results for the four main DRCC cases.
 
 The three-phase workbooks are required public inputs. Their absence or a schema
@@ -312,12 +325,16 @@ python -m Simulator.runners.smoke_test --case drcc
 | Smoke case | Work performed |
 |---|---|
 | Aggregation | Tiny mixed fleet with 2 EVs, 1 HP, and 1 BSS; one PreTrainNet update |
-| Balanced T–D | `case10ba_ds`; one voltage-parameter sample and one PreTrainNet update |
+| Balanced T–D | `case10ba_ds`; load its PreTrainNet weights, then use one voltage-parameter sample for one FullNet update |
 | DRCC | `x2g1s10` fixture, group 0; one parameter sample and one FullNet update |
 
 These checks exercise model construction, original-region optimization,
 polytope optimization, loss construction, backpropagation, and an optimizer
 step. They do not run the complete paper schedules and do not write artifacts.
+
+The T–D check reads
+`results/ds_proj/case10ba_ds/pretrainnet_weights.pth` and tests the shared
+training components without importing or executing `main_ds.py`.
 
 ### 3. Run one update with the public three-phase inputs
 
@@ -351,16 +368,26 @@ The nine training runners listed below default to the existing project
 - `main_drcc`.
 
 This preserves the repository's established directory layout. A normal saved run
-can replace an existing artifact with the same path and filename. Use
-`--smoke --no-save` when checking executability without changing reference
-results. `--output-root PATH` remains available for an explicitly chosen
-alternative root; omit it to use the project structure documented here.
+can replace an existing artifact with the same path and filename. The eight
+runners above other than `main_ds` support `--smoke --no-save` for non-writing
+checks and `--output-root PATH` for an explicitly chosen alternative root.
+Omit `--output-root` to retain the established project structure.
+
+`main_ds.py` has no command-line parser: `--help`, `--smoke`, `--no-save`, and
+`--output-root` are ignored, not applied. Passing them still starts the configured
+training and can overwrite reference results. For a non-writing balanced T–D
+check, use `python -m Simulator.runners.smoke_test --case td` instead.
+`main_epigraph.py`, `main_ev_agg.py`, and `main_safe_region_simple.py` also use
+source-level settings without a command-line parser. `main_safe_region_mg.py`
+supports only `--model-type` and `--device` (plus `--help`); it has no smoke or
+no-save option. These additional scripts can also overwrite their existing outputs.
 
 ## Run the paper workflows
 
-Full paper schedules can be computationally expensive. Inspect `--help` and use
-`--case`, `--group`, `--dimensions`, or shortened epoch options before launching
-a large sweep.
+Full paper schedules can be computationally expensive. For runners with an
+argument parser, inspect `--help` and use the available case, group, dimension,
+or epoch options before launching a large sweep. For source-configured scripts,
+inspect and edit their settings before running; `--help` does not stop training.
 
 ### Supplementary geometry cases
 
@@ -415,33 +442,22 @@ case10ba_ds       case17me_ds       case33bw_ds       case51ga_ds
 case74_ds         case118zh_ds      case136ma_ds      case533mt_hi_ds
 ```
 
-Pretrain a fixed polytope:
+Configure `dscases` and `model_type` in `Simulator/runners/main_ds.py`, then run:
 
 ```bash
-python -m Simulator.runners.main_ds --case case10ba_ds --model-type pretrainnet --seed 0
+python -m Simulator.runners.main_ds
 ```
 
-Train the two FullNet variants:
+The current configuration trains `fullnet` for `case533mt_hi_ds`. Set
+`model_type = 'pretrainnet'` to generate the initial fixed-polytope weights.
+FullNet loads `pretrainnet_weights.pth` from `results/ds_proj/<case>/` and
+saves `fullnet_weights.pth` in the same directory. Its current schedule uses
+60 initial epochs followed by two feasibility-focused epochs.
 
-```bash
-python -m Simulator.runners.main_ds --case case10ba_ds --model-type fullnet --variant feasible --seed 0
-python -m Simulator.runners.main_ds --case case10ba_ds --model-type fullnet --variant moderate --seed 0
-```
-
-Omit `--case` to process all eight cases, or repeat it to select several.
-The varying root-node voltage dataset contains 100 samples over
-`[0.95, 1.05]` p.u.
-
-The paper schedules are:
-
-- PreTrainNet: 500 updates with learning rate `0.1 / p_base`;
-- Moderate FullNet: 60 epochs with relative optimality weight `0.6`; and
-- Feasible FullNet: 40 balancing epochs followed by 10
-  feasibility-focused epochs, with case-adaptive learning rates specified in
-  Supplementary Note 4.
-
-FullNet loads `pretrainnet_weights.pth` from the selected output root and falls
-back to the corresponding weight in the project's `results/ds_proj` directory.
+This is a top-level script, not a callable `main()` or CLI. Its current voltage
+perturbations are `[-0.04, 0.04]` around 1.0 p.u., giving a sampled voltage
+range of `[0.96, 1.04]` p.u. Edit its source settings for a different case,
+training schedule, or device; use the separate T–D smoke command for a short check.
 
 ### Real three-phase distribution network
 
@@ -457,21 +473,21 @@ Keeping this identifier is intentional: it preserves the correspondence among
 the manuscript, supplementary table, code, and the 27 T–D result combinations.
 It is not a retained organization, customer, feeder, or location identifier.
 
-Train PreTrainNet or the feasible FullNet variant:
+Train PreTrainNet or FullNet:
 
 ```bash
 python -m Simulator.runners.main_ds_3phase --model-type pretrainnet --seed 0
-python -m Simulator.runners.main_ds_3phase --model-type fullnet --variant feasible --seed 0
+python -m Simulator.runners.main_ds_3phase --model-type fullnet --seed 0
 ```
 
-The moderate variant is also available:
+Both models save to `results/ds_proj/case36real_3phase_ds/` by default.
+FullNet uses 40 balancing epochs followed by 10 feasibility-focused epochs;
+`--epochs` and `--phase2-epochs` override these counts.
 
-```bash
-python -m Simulator.runners.main_ds_3phase --model-type fullnet --variant moderate --seed 0
-```
-
-The same 8-facet, two-dimensional interface-power polytope and
-`[0.95, 1.05]` p.u. voltage sampling range are used as for the balanced cases.
+The initial interface-power polytope has eight facets in two dimensions, as in
+the balanced cases. The three-phase runner samples voltage perturbations in
+`[-0.05, 0.05]` around 1.0 p.u., giving `[0.95, 1.05]` p.u. This differs from
+the current balanced runner's `[0.96, 1.04]` p.u. range.
 
 ### DRCC portfolio optimization
 
@@ -704,10 +720,10 @@ is all zeros; the snapshot filenames are the authoritative step indices.
 
 ### T–D network optimization
 
-- `results/ds_proj` contains the **Feasible PolyFormer** results.
-- `results/ds_proj_original` contains the **Moderate PolyFormer** results.
+`results/ds_proj` is the shared output directory for distribution-network
+training and T–D evaluation results.
 
-Each `td_results/td_experiment_results.xlsx` workbook contains:
+The `td_results/td_experiment_results.xlsx` workbook contains:
 
 - `ds_case_parameters`: the nine distribution-case parameters;
 - `pretrainnet`: fixed-polytope results;
@@ -719,16 +735,7 @@ systems times nine distribution systems.
 
 | Result set | Mean maximum feasibility error | Maximum feasibility error | Mean signed objective error |
 |---|---:|---:|---:|
-| Feasible (`ds_proj`) | `6.3587e-10` | `3.7244e-9` | `7.2325e-4` |
-| Moderate (`ds_proj_original`) | `2.6037e-6` | `3.0765e-5` | `3.7100e-5` |
-
-The related English vertex workbooks in both `td_results` directories are:
-
-```text
-vertex_results_root_voltage_unfixed.xlsx
-vertex_results_root_voltage_varying.xlsx
-vertex_results_root_voltage_fixed.xlsx
-```
+| PolyFormer (`ds_proj`) | `6.3587e-10` | `3.7244e-9` | `7.2325e-4` |
 
 `fullnet.xlsx`, `fullnet533.xlsx`, and `fullnet_3phase.xlsx` are retained
 intermediate batch outputs; `td_experiment_results.xlsx` is the complete
@@ -754,8 +761,8 @@ FullNet directly.
 
 `results/safe_region`, `results/epigraph`, and
 `results/ev_agg` are exploratory or historical workflows rather than evidence for
-the paper's principal claims. The incomplete `results/DRCC/x210g3s420`,
-`results/DRCC/x400g5s1280`, and `results/epigraph_specified` directories are also
+the paper's principal claims. The incomplete `results/DRCC/x210g3s420` and
+`results/DRCC/x400g5s1280` directories are also
 outside the four main application cases.
 
 ## Implementation notes
@@ -767,8 +774,10 @@ outside the four main application cases.
   modes.
 - Final batches use their actual size. Gradient logging tolerates parameters
   without gradients and zero-length parameter blocks.
-- The documented runners seed NumPy and PyTorch. Solver parallelism and GPU
-  kernels can still cause small platform-dependent numerical differences.
+- Runners with `--seed` seed NumPy and PyTorch, and the combined smoke checks
+  use seed 0. `main_ds.py` and the two safe-region runners do not set a random
+  seed; do not assume deterministic reruns for these scripts. Solver parallelism
+  and GPU kernels can still cause small platform-dependent numerical differences.
 - Canonical paths are rooted through `Simulator.PROJECT_ROOT` and do not depend
   on the caller's working directory after the module is launched from the project
   root.

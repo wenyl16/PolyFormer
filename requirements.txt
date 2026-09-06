@@ -1,8 +1,8 @@
-# IMPORTANT: this file installs Python packages only.
-# With the source defaults, every training and smoke workflow also requires a
-# working Gurobi installation and license. T-D, three-phase, nonconvex, and
-# epigraph workflows additionally require IPOPT. environment.yml installs IPOPT,
-# but not Gurobi.
+# IMPORTANT: gurobipy installs the Gurobi Python interface and solver library,
+# not an unrestricted license. Configure a valid Gurobi license for the paper
+# models; the bundled size-limited license is not sufficient for large cases.
+# T-D, three-phase, nonconvex, and epigraph workflows additionally require the
+# IPOPT executable: environment.yml installs it; this pip file does not.
 # Solver selection is source-level: changing only ErrorCalculator(solver=...)
 # does not change its independent cvx_solver='gurobi' default. See the solver
 # matrix and replacement instructions at the beginning of README.md.
@@ -12,9 +12,10 @@ pandas>=2.2,<3.0
 scipy>=1.13,<2.0
 torch>=2.2,<3.0
 pyomo>=6.9,<7.0
+# Match the Gurobi version used in the runtime checks.
+gurobipy==12.0.2
 matplotlib>=3.8,<4.0
 Pillow>=10,<12
 openpyxl>=3.1,<4.0
 xlrd>=2.0,<3.0
-PYPOWER>=5.1.18,<6.0
 seaborn>=0.13,<1.0

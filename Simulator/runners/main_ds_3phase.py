@@ -24,7 +24,6 @@ def _device(name):
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model-type', choices=('pretrainnet', 'fullnet'), default='pretrainnet')
-    parser.add_argument('--variant', choices=('feasible', 'moderate'), default='feasible')
     parser.add_argument('--epochs', type=int)
     parser.add_argument('--phase2-epochs', type=int)
     parser.add_argument('--theta-samples', type=int, default=100)
@@ -101,13 +100,10 @@ def main(argv=None):
             n_hidden=128,
             device=device,
         ).to(device)
-        if args.variant == 'moderate':
-            schedule = [((60 if args.epochs is None else args.epochs), 5e-5 / p_rated, 0.6)]
-        else:
-            schedule = [
-                ((40 if args.epochs is None else args.epochs), 1e-5 / p_rated, 1.0),
-                ((10 if args.phase2_epochs is None else args.phase2_epochs), 2e-6 / p_rated, 1e-3),
-            ]
+        schedule = [
+            ((40 if args.epochs is None else args.epochs), 1e-5 / p_rated, 1.0),
+            ((10 if args.phase2_epochs is None else args.phase2_epochs), 2e-6 / p_rated, 1e-3),
+        ]
 
     trainer = Trainer(model=model, error_calculator=case['errorcalculator'], compute_loss=compute_loss)
     started = time.time()
@@ -126,18 +122,12 @@ def main(argv=None):
         )
 
     if save_artifacts:
-        if model_type == 'fullnet' and args.variant == 'moderate':
-            result_path = (
-                args.output_root / 'ds_proj_original' /
-                case['casename'] / 'fullnet_weights.pth'
-            )
-        else:
-            result_path = case['result_path']
+        result_path = case['result_path']
         result_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), result_path)
 
     print(
-        f"DS_3PHASE_OK model={model_type} variant={args.variant} "
+        f"DS_3PHASE_OK model={model_type} "
         f"updates={len(trainer.loss_history)} elapsed_s={time.time() - started:.2f}"
     )
 

@@ -352,18 +352,23 @@ class ShapeDrawer_2D:
             self.ax.legend(loc='upper right')
         plt.show()
 
-    def save(self, filename, dpi=300, transparent=False, format='svg', show_legend=True):
-        """保存图形到文件（SVG格式）"""
+    def save(self, filename, dpi=300, transparent=False, format=None, show_legend=True):
+        """Save a string or PathLike filename, inferring its format (default: SVG).
+
+        An explicit format overrides and replaces a conflicting file extension.
+        """
+        filename = os.fsdecode(os.fspath(filename))
+        stem, extension = os.path.splitext(filename)
+        format = (format or extension.lstrip('.') or 'svg').lower()
+        if extension.lower() != '.' + format:
+            filename = (stem if extension else filename) + '.' + format
+
         if show_legend and any(shape.get('label') for shape in self.shapes):
             self.ax.legend(
                 loc='upper right',
                 bbox_to_anchor=(1, 1),
                 frameon=False  # 无边框图例
             )
-
-        # 确保保存为SVG格式
-        if not filename.lower().endswith('.'+format):
-            filename += '.'+format
 
         self.fig.savefig(
             filename,

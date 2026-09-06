@@ -9,11 +9,6 @@ model_type = 'fullnet'
 file_path = f'{PROJECT_ROOT}\\results\\ds_proj\\td_results\\td_experiment_results.xlsx'
 df = pd.read_excel(file_path, sheet_name=model_type)
 
-file_path = f'{PROJECT_ROOT}\\results\\ds_proj_original\\td_results\\td_experiment_results.xlsx'
-df_original = pd.read_excel(file_path, sheet_name=model_type)
-
-file_path = f'{PROJECT_ROOT}\\results\\ds_proj\\td_results\\vertex_results_root_voltage_varying.xlsx'
-df_vtx = pd.read_excel(file_path)
 
 # Data from the provided table
 
@@ -728,8 +723,7 @@ def draw_errors_comparison(df1, df2, method1_name='Method 1', method2_name='Meth
     # 标题
 
 
-draw_errors_comparison(df_original,df,
-                      link_style='none',
+draw_feas_obj_errors(df,
                       use_log_x=True,         # x轴取绝对值
                       use_symlog_y=True,      # y轴使用对称对数
                       y_linear_threshold=1e-5 # y轴线性区间阈值
