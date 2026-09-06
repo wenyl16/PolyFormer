@@ -6,18 +6,20 @@ Research code, public data, and reference results accompanying the manuscript
 > **Important solver requirement**
 >
 > Installing `requirements.txt` is not sufficient to run the training or smoke
-> workflows. Every documented training and smoke command uses **Gurobi** through
-> Pyomo and requires a working Gurobi installation and license. Some workflows
-> additionally require **IPOPT** or **IBM ILOG CPLEX**, as listed below.
+> workflows. With the source defaults, every documented training and smoke
+> command uses **Gurobi** through Pyomo and requires a working Gurobi installation
+> and license. Some workflows additionally use **IPOPT** or **IBM ILOG CPLEX**.
+> Gurobi can be removed from selected workflows by changing both solver settings
+> described in [Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
 
 ## Requirements and installation
 
 Run the following commands from the repository root. Python **3.12** is required;
 the source uses Python 3.12 f-string syntax.
 
-### Solver matrix
+### Default solver matrix
 
-| Workflow | Required external solver(s) |
+| Workflow | External solver(s) used by the source defaults |
 |---|---|
 | Data and result validation (`python -m Simulator.validate_release`) | None |
 | Aggregation and DRCC | Gurobi |
@@ -69,6 +71,124 @@ For the combined main-application smoke test, both `gurobi` and `ipopt` must be
 `True`. CPLEX is only needed for the polygon, ellipse, and relevant legacy MPC
 paths. `available(False)` checks discovery, not license validity or the
 ability to solve a model; the smoke commands below perform an actual solve.
+
+### Selecting or replacing solver backends
+
+Solver selection is currently a **source-level setting**. The public runners do
+not define a `--solver` command-line option, so adding `--solver ...` to a runner
+command will produce an argument error. The central `ErrorCalculator` already
+supports separate solver names through Pyomo's `SolverFactory`:
+
+| Setting | What it solves | Minimum model capability |
+|---|---|---|
+| `solver` | Optimization over the original feasible region | Depends on the case; see the table below |
+| `cvx_solver` | Directional optimization and projection over the learned polytope | Continuous LP and convex QP |
+| `fmax_solver` | The initial upper-objective calculation for an epigraph model | The epigraph's objective-maximization problem |
+
+`cvx_solver` defaults independently to `gurobi`. Therefore, changing only
+`solver='cplex'` or `solver='ipopt'` **does not remove the Gurobi dependency**.
+To change a case, edit its `ErrorCalculator(...)` call and set both names
+explicitly:
+
+```python
+errorcalculator = ErrorCalculator(
+    original_model=original_model,
+    A_hat=A_hat,
+    solver='cplex',       # original feasible-region model
+    cvx_solver='cplex',   # learned-polytope LP/QP subproblems
+)
+```
+
+For example, a Gurobi-free T–D configuration keeps IPOPT for the nonlinear
+network and assigns CPLEX to the polytope:
+
+```python
+errorcalculator = ErrorCalculator(
+    original_model=original_model,
+    A_hat=A_hat,
+    solver='ipopt',
+    cvx_solver='cplex',
+)
+```
+
+IPOPT may also be used as `cvx_solver` for the continuous polytope LP/QP models.
+It passed the one-update polygon smoke check in this release audit, although a
+dedicated convex QP solver is normally preferable for speed and termination
+behavior. A CPLEX-only polygon check and a CPLEX-only mixed-aggregation check
+also passed one update. These checks establish executability of those small
+configurations, not numerical equivalence for every full experiment.
+
+Choose the original-region solver according to the complete model encountered
+during training. Every case adds a squared-distance projection objective, so an
+apparently linear original model still requires QP or MIQP support.
+
+| Original-region case family | Model class encountered during training | Safe solver guidance |
+|---|---|---|
+| Polygon, cube, DRCC, EV, and continuous aggregation | Continuous LP and convex QP | Gurobi or CPLEX; IPOPT is a continuous fallback |
+| Ellipse, ball, quadratic safe region, and MPC feasible region | Continuous QCP/QCQP | Gurobi or CPLEX; IPOPT can provide a local continuous-NLP solve |
+| Mixed aggregation and mixed-integer microgrid | MILP and convex MIQP | Gurobi or CPLEX; IPOPT cannot handle binary variables |
+| Nonconvex geometry, balanced T–D, and three-phase T–D | Continuous nonconvex QCQP/NLP | IPOPT is the tested project setting; validate any replacement on the exact case |
+| Epigraph and MPC-objective upper-bound calculation | Nonconvex objective maximization | Keep or set `fmax_solver` separately; do not assume the ordinary `solver` is suitable |
+
+GLPK and CBC are not drop-in PolyFormer training solvers: they do not solve the
+quadratic projection problems created by `ErrorCalculator`. HiGHS is likewise
+not a release-tested substitute through the Pyomo interface pinned here. Other
+Pyomo solver plugins may be used only after checking the required model class
+and running the corresponding one-update smoke test. For nonconvex cases,
+changing from a local to a global solver, or vice versa, can change the learned
+boundary even when both runs terminate successfully.
+
+The nine public workflows contain the following `ErrorCalculator(...)` calls.
+Edit the named function and add or replace both keyword arguments shown above:
+
+| Workflow | Source function to edit | Source default: `solver` / `cvx_solver` |
+|---|---|---|
+| Polygon | `Simulator/cases/basic_cases.py` → `case_polygon` | `cplex` / implicit `gurobi` |
+| Ellipse | `Simulator/cases/basic_cases.py` → `case_ellipse` | `cplex` / implicit `gurobi` |
+| Nonconvex region | `Simulator/cases/basic_cases.py` → `case_nonconvex` | `ipopt` / implicit `gurobi` |
+| Hypercube | `Simulator/cases/basic_cases.py` → `case_cube` | `gurobi` / implicit `gurobi` |
+| Ball | `Simulator/cases/basic_cases.py` → `case_ball` | `gurobi` / implicit `gurobi` |
+| Aggregation | `Simulator/cases/aggregation_case.py` → `Aggregator.case_aggregator` | `gurobi` / implicit `gurobi`; change both continuous and mixed branches |
+| Balanced T–D | `Simulator/cases/TD_case.py` → `DScase_train` | `ipopt` / implicit `gurobi` |
+| Three-phase T–D | `Simulator/cases/DS_case_3phase.py` → `DScase_3phase_train` | `ipopt` / implicit `gurobi` |
+| DRCC | `Simulator/cases/DRCC_case.py` → `DRCCModelBuilder.build_drcc_train` | `gurobi` / implicit `gurobi` |
+
+The epigraph and legacy programs have additional solver entry points that are
+not controlled by the two settings above:
+
+- In `case_epigraph`, add `'fmax_solver': 'gurobi'` (or another verified
+  backend) to the `original_model` dictionary if the upper-objective solve
+  should differ from `solver`.
+- `TD_case.generate_vertices`, `DRCCModelBuilder.solve`, and
+  `PolyBallHausdorffCalculator` already accept a `solver_name=...` argument;
+  pass the new name at their call sites.
+- `TD_case.disagg_DS` and `DS_case_3phase.disagg_DS_3phase` construct IPOPT
+  directly. Change their `SolverFactory('ipopt')` calls if those helpers are
+  used.
+- `Aggregator.build_cube_approximation` constructs Gurobi directly.
+- `safe_region_case.py` stores Gurobi in `self.solver`; this controls its bound
+  calculation and original-region solves, while its `ErrorCalculator` calls
+  still need an explicit `cvx_solver`.
+- `MPC_case.py` has distinct solvers for the feasible-region model, objective
+  epigraph, epigraph maximum, original MPC, and approximated MPC. Update each
+  corresponding `SolverFactory(...)`, `solver=...`, and `fmax_solver` entry;
+  do not replace them with one shared name unless that solver supports every
+  listed model class.
+- The six `tst_TD*.py` helper scripts construct IPOPT directly. They are
+  evaluation scripts rather than the documented training runners.
+
+After editing, first check discovery of the exact names:
+
+```bash
+python -c "from pyomo.environ import SolverFactory; names=('ipopt','cplex'); print({s: SolverFactory(s).available(False) for s in names})"
+```
+
+Then run the one-update command for the modified workflow from
+[Validate the checkout](#validate-the-checkout). Use a non-parallel option when
+the runner provides one if the solver license allows only a single concurrent
+process. `ErrorCalculator` accepts only `optimal`, `locallyOptimal`, or
+`globallyOptimal` termination; a time-limit result with an incumbent is treated
+as a failure.
 
 PolyFormer is a physics-informed machine-learning framework for replacing complex
 feasible-region constraints with compact polytopes. For a parameterized feasible
