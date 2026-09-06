@@ -1,5 +1,10 @@
-# Tested release environment: Python 3.12.3 on Windows 11 (2026-09-02).
-# External optimization executables are documented in README.md.
+# IMPORTANT: this file installs Python packages only.
+# Every training and smoke workflow also requires a working Gurobi installation
+# and license. T-D, three-phase, nonconvex, and epigraph workflows additionally
+# require IPOPT. Polygon and ellipse workflows additionally require IBM ILOG
+# CPLEX and its license. environment.yml installs IPOPT, but not Gurobi or CPLEX.
+# See the solver matrix at the beginning of README.md before running the code.
+# Tested Python environment: Python 3.12.3 on Windows 11.
 numpy>=1.26.4,<2.0
 pandas>=2.2,<3.0
 scipy>=1.13,<2.0

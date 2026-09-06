@@ -3,6 +3,73 @@
 Research code, public data, and reference results accompanying the manuscript
 **“Learning efficient representations of complex constraints for scalable optimization.”**
 
+> **Important solver requirement**
+>
+> Installing `requirements.txt` is not sufficient to run the training or smoke
+> workflows. Every documented training and smoke command uses **Gurobi** through
+> Pyomo and requires a working Gurobi installation and license. Some workflows
+> additionally require **IPOPT** or **IBM ILOG CPLEX**, as listed below.
+
+## Requirements and installation
+
+Run the following commands from the repository root. Python **3.12** is required;
+the source uses Python 3.12 f-string syntax.
+
+### Solver matrix
+
+| Workflow | Required external solver(s) |
+|---|---|
+| Data and result validation (`python -m Simulator.validate_release`) | None |
+| Aggregation and DRCC | Gurobi |
+| Balanced and three-phase T–D | Gurobi + IPOPT |
+| Polygon and ellipse | Gurobi + CPLEX |
+| Nonconvex region and epigraph | Gurobi + IPOPT |
+| Hypercube and ball | Gurobi |
+| Legacy EV and safe-region programs | Gurobi |
+| Legacy MPC programs | Gurobi; some paths also use IPOPT and CPLEX |
+
+Gurobi solves all approximating-polytope subproblems and is therefore common to
+every documented training runner. IPOPT solves the original nonlinear T–D,
+three-phase, nonconvex, and epigraph models. CPLEX solves the original polygon
+and ellipse models and is also called by one legacy MPC path. The documented
+Python runners do not require MATLAB or a MATPOWER installation.
+
+The tested solver versions are Gurobi 12.0.2, IPOPT 3.14.17, and CPLEX 22.1.2.
+These are tested versions, not strict minimum versions.
+
+### Recommended Conda environment
+
+```bash
+conda env create -f environment.yml
+conda activate polyformer
+```
+
+This installs Python 3.12, the packages in `requirements.txt`, and IPOPT. It does
+**not** install or license Gurobi or CPLEX; install those products separately and
+make their solver interfaces available to Pyomo.
+
+For an existing Python 3.12 environment:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+The pip command installs Python packages only. It does not install the Gurobi,
+IPOPT, or CPLEX solver executables. NumPy is constrained to `<2.0` to match the
+tested scientific Python stack. CUDA is optional; smoke checks can run with
+PyTorch on CPU.
+
+Check whether Pyomo can discover the three solver interfaces:
+
+```bash
+python -c "from pyomo.environ import SolverFactory; print({s: SolverFactory(s).available(False) for s in ('gurobi','ipopt','cplex')})"
+```
+
+For the combined main-application smoke test, both `gurobi` and `ipopt` must be
+`True`. CPLEX is only needed for the polygon, ellipse, and relevant legacy MPC
+paths. `available(False)` checks discovery, not license validity or the
+ability to solve a model; the smoke commands below perform an actual solve.
+
 PolyFormer is a physics-informed machine-learning framework for replacing complex
 feasible-region constraints with compact polytopes. For a parameterized feasible
 region
@@ -91,54 +158,11 @@ PolyFormer/
     └── validate_release.py    # Data/result integrity checks
 ```
 
-## Installation
-
-### Python environment
-
-Python **3.12** is required. The source uses Python 3.12 f-string syntax.
-
-The tested dependency ranges are recorded in `requirements.txt`. A Conda
-environment is supplied because the T–D workflows require an IPOPT executable:
-
-```bash
-conda env create -f environment.yml
-conda activate polyformer
-```
-
-For an existing Python 3.12 environment:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-NumPy is constrained to `<2.0` to match the tested scientific Python stack.
-CUDA is optional; smoke checks can run with PyTorch on CPU.
-
-### Optimization solvers
-
-Solvers are external to the Python package installation.
-
-| Solver | Used by | Requirement |
-|---|---|---|
-| **Gurobi** | Aggregation, DRCC, and auxiliary polytope problems | A working Gurobi installation and license |
-| **IPOPT** | Original nonlinear distribution-network models and nonlinear geometry cases | Installed by the supplied Conda environment |
-| **CPLEX** | Canonical polygon and ellipse cases | A working CPLEX installation and license |
-
-Check solver visibility after activating the environment:
-
-```bash
-python -c "from pyomo.environ import SolverFactory; print({s: SolverFactory(s).available(False) for s in ('gurobi','ipopt','cplex')})"
-```
-
-The core application checks require Gurobi and IPOPT. Solver failures and
-non-optimal termination conditions are reported as errors rather than converted
-to zero error values.
-
 ## Validate the checkout
 
-Run all commands from the repository root.
-
 ### 1. Validate data and reference results
+
+The validator itself does not invoke Gurobi, IPOPT, or CPLEX.
 
 ```bash
 python -m Simulator.validate_release
@@ -157,6 +181,8 @@ The three-phase workbooks are required public inputs. Their absence or a schema
 mismatch is a validation failure.
 
 ### 2. Run one update for the three main applications
+
+The combined command requires both Gurobi and IPOPT.
 
 ```bash
 python -m Simulator.runners.smoke_test --case all
