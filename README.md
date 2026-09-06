@@ -341,7 +341,7 @@ python -m Simulator.runners.main_ball --smoke --no-save --device cpu --seed 0
 
 ## Output behavior
 
-The nine documented training runners default to the existing project
+The nine training runners listed below default to the existing project
 `results` directory:
 
 - `main_polygon`, `main_ellipse`, `main_nonconvex`, `main_cube`, and
@@ -500,6 +500,45 @@ Omit `--group` to train every group, or repeat it:
 ```bash
 python -m Simulator.runners.main_drcc --case 400x8x1280 --group 0 --group 1 --seed 0
 ```
+
+### Microgrid safe-region training
+
+The microgrid experiment uses one runner for both network types:
+
+```bash
+python -m Simulator.runners.main_safe_region_mg --model-type pretrainnet
+python -m Simulator.runners.main_safe_region_mg --model-type fullnet
+```
+
+Omitting `--model-type` selects `fullnet`. Both modes use 12 five-minute
+periods, two continuous TCLs, two discrete TCLs, and two ESSs. The supplied
+load and PV profiles are multiplied by 20 and 40, respectively; the temperature
+profile is unchanged. Training runs serially and automatically selects CUDA
+when available; use `--device cpu` to select CPU.
+
+The two modes preserve their original settings:
+
+| Setting | PreTrainNet | FullNet |
+|---|---|---|
+| ESS lower energy bounds | `[0.0, 0.0]` | `[10.0, 10.0]` |
+| Optimizer | SGD | Adam |
+| First phase | 500 epochs, learning rate `0.1`, error weight `1.0` | 20 epochs, learning rate `0.002`, error weight `1.0` |
+| Second phase | None | 1 epoch, learning rate `0.0002`, error weight `0.02`; optimizer and scheduler reinitialized |
+| StepLR scheduler | Step size 200, gamma `0.98` | Step size 100, gamma `0.98` |
+| Training batch size | 1 | 5 |
+| Weight file | `pretrainnet_weights.pth` | `fullnet_weights.pth` |
+| History file | Not written | `training_history.pkl` |
+
+Here, error weight means `rate_opt_feas`, the optimality-to-feasibility loss
+ratio. Both modes retain `n_cal=2`, feasibility and optimality tolerances of
+`1e-10`, and the case's 100-sample dataset with loader batch size 5. Training
+callbacks retain their original intervals (50 for PreTrainNet, 1 for FullNet).
+PreTrainNet trains at the fixed initial parameter setting; FullNet uses sampled
+profile windows from the dataset.
+FullNet initializes directly from the case's initial polytope; it does not load
+the PreTrainNet weights. Outputs remain under `results/safe_region/mg_case`,
+and running a mode can overwrite its existing weights, figures, and, for
+FullNet, training history.
 
 ## Data inventory and provenance
 
