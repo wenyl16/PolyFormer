@@ -1,18 +1,60 @@
 # PolyFormer
 
+## ⚠️ Important: solver-dependent workflows cannot run on Code Ocean
+
+> **A usable Gurobi solver and license cannot be installed and configured in
+> the accompanying Code Ocean capsule.** Installing the `gurobipy` Python
+> package alone does not provide the solver setup and license required by the
+> optimization models. Consequently, running programs under
+> `/code/Simulator/runners` in Code Ocean is expected to stop with
+> `Solver not available` (or an equivalent solver/license error).
+> Solver-dependent programs under `/code/Simulator/testers` are affected in the
+> same way.
+
+Reviewers using Code Ocean who wish to execute training or testing should clone
+or download the GitHub repository
+([https://github.com/wenyl16/PolyFormer](https://github.com/wenyl16/PolyFormer))
+to a local machine, install the dependencies from `requirements.txt` (or create
+the supplied Conda environment), and then follow the environment and solver
+instructions in this README. A working local Gurobi installation with a suitable
+license is required; workflows that use nonlinear distribution-network models
+also require IPOPT. Solver selection is explained in
+[Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
+
+This GitHub repository already contains the trained model artifacts and generated
+test results under `results`. Reviewers interested only in reproducing the
+figures may therefore skip training and testing and run the scripts under
+`Simulator/drawers` directly from the configured local checkout.
+
+## Main execution workflow
+
+The complete workflow must be run locally in the following order:
+
+1. **Train models with `runners`.** Run the relevant program under
+   `Simulator/runners`. It writes trained weights and intermediate training
+   artifacts to the corresponding directory under `results`. For workflows with
+   staged training, run PreTrainNet first and then FullNet or BiasNet for the
+   same case and output directory.
+2. **Generate evaluation results with `testers`.** After the required model
+   weights exist, run the matching program under `Simulator/testers`. These
+   scripts load the trained weights and input data, evaluate the models, and
+   write the tables, spreadsheets, or pickle files consumed by the figures.
+3. **Draw figures with `drawers`.** After the required test results exist, run
+   the matching program under `Simulator/drawers` to generate the paper figures.
+
+```text
+runners (training) → trained weights → testers (evaluation)
+                   → test results → drawers (figures)
+```
+
+Run all three stages for a complete reproduction. For figure-only reproduction,
+use the included trained and tested `results` artifacts and begin directly with
+stage 3.
+
+## About PolyFormer
+
 Research code, public data, and reference results accompanying the manuscript
 **“Learning efficient representations of complex constraints for scalable optimization.”**
-
-> **Important solver requirement**
->
-> Installing `requirements.txt` is not sufficient to run the training or smoke
-> workflows. With the source defaults, every documented training and smoke
-> command uses **Gurobi** through Pyomo. The requirements install `gurobipy`, but
-> a suitable **Gurobi license must be configured separately**; the bundled
-> size-limited license is not sufficient for the large paper cases. The nonlinear
-> workflows additionally need the **IPOPT executable**. Solver
-> selection is explained in
-> [Selecting or replacing solver backends](#selecting-or-replacing-solver-backends).
 
 ## Requirements and installation
 
